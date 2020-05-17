@@ -117,6 +117,10 @@ extern char etext;
 #include <sys/resource.h>
 #endif
 
+#ifdef HAVE_SCHED_H
+#include <sched.h>
+#endif
+
 #include "pdumper.h"
 #include "epaths.h"
 
@@ -234,6 +238,11 @@ Initialization options:\n\
 #ifdef HAVE_PDUMPER
     "\
 --dump-file FILE            read dumped state from FILE\n\
+",
+#endif
+#ifdef HAVE_SCHED_H
+    "\
+--scheduler POLICY          use the given scheduler policy\n\
 ",
 #endif
     "\
@@ -939,6 +948,46 @@ load_pdump (int argc, char **argv, char const *original_pwd)
 }
 #endif /* HAVE_PDUMPER */
 
+#ifdef HAVE_SCHED_H
+/*  Interpret the string policy passed to the --scheduler argument,
+    and try to call sched_setscheduler(2) based on the lowercase value
+    of the string passed in. If the scheduler policy is understood, the
+    return value is the return value of sched_setscheduler. We try to
+    support SCHED_BATCH and SCHED_IDLE, which are defined on Linux but
+    not by POSIX.
+
+    If an unknown policy is passed in a warning is printed to stderr,
+    but it is not considered to be a fatal error. This is intentional
+    because it simplifies elisp code that wants to use this feature:
+    Emacs can be invoked with "--scheduler idle" and the call will do
+    the right thing on systems that support SCHED_IDLE without causing
+    a fatal error on other systems.  */
+static int
+set_scheduler_policy (const char *policy)
+{
+  struct sched_param param;
+  param.sched_priority = 0;
+
+  if (!c_strcasecmp (policy, "other"))
+    return sched_setscheduler (0, SCHED_OTHER, &param);
+#ifdef SCHED_BATCH
+  else if (!c_strcasecmp (policy, "batch"))
+    return sched_setscheduler (0, SCHED_BATCH, &param);
+#endif /* SCHED_BATCH */
+#ifdef SCHED_IDLE
+  else if (!c_strcasecmp (policy, "idle"))
+    return sched_setscheduler (0, SCHED_IDLE, &param);
+#endif /* SCHED_IDLE */
+
+  /*  NOTE: POSIX also describes SCHED_FIFO and SCHED_RR real-time
+      scheduling policies, but they're not really that useful for
+      Emacs, and to support these we'd need a way to pick a meaningful
+      non-zero value for param.sched_priority.  */
+  fprintf (stderr, "Unknown scheduler policy '%s'\n", policy);
+  return 0;
+}
+#endif /*  HAVE_SCHED_H */
+
 int
 main (int argc, char **argv)
 {
@@ -1141,6 +1190,15 @@ main (int argc, char **argv)
 #ifdef HAVE_PDUMPER
   if (dumped_with_pdumper_p ())
     pdumper_record_wd (emacs_wd);
+#endif
+
+#ifdef HAVE_SCHED_H
+  if (argmatch (argv, argc, "-scheduler", "--scheduler", 4, &junk, &skip_args))
+    {
+      if (set_scheduler_policy (junk) != 0)
+        fatal ("Failed to set scheduler policy: %s", strerror (errno));
+      junk = 0;
+    }
 #endif
 
   if (argmatch (argv, argc, "-chdir", "--chdir", 4, &ch_to_dir, &skip_args))
@@ -2148,6 +2206,9 @@ static const struct standard_args standard_args[] =
   { "-temacs", "--temacs", 1, 1 },
 #ifdef HAVE_PDUMPER
   { "-dump-file", "--dump-file", 1, 1 },
+#endif
+#ifdef HAVE_SCHED_H
+  { "-scheduler", "--scheduler", 1, 1 },
 #endif
 #ifdef HAVE_NS
   { "-NSAutoLaunch", 0, 5, 1 },
