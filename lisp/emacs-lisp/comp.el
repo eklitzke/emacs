@@ -2296,8 +2296,7 @@ processes from `comp-async-compilations'"
             (setf num-cpus
                   ;; Half of the CPUs or at least one.
                   ;; FIXME portable?
-                  (max 1 (/ (string-to-number (shell-command-to-string "nproc"))
-                            2))))
+                  (max 1 (string-to-number (shell-command-to-string "nproc")))))
       comp-async-jobs-number)))
 
 (defun comp-run-async-workers ()
@@ -2323,7 +2322,7 @@ display a message."
                                   comp-verbose ,comp-verbose
                                   load-path ',load-path)
                             (message "Compiling %s..." ,source-file)
-                            (native-compile ,source-file ,(and load t))))
+                            (native-compile ,source-file ,(and load t) t)))
                    (source-file1 source-file) ;; Make the closure works :/
                    (_ (progn
                         (comp-log "\n")
@@ -2367,13 +2366,14 @@ display a message."
 ;;; Compiler entry points.
 
 ;;;###autoload
-(defun native-compile (function-or-file &optional with-late-load)
+(defun native-compile (function-or-file &optional with-late-load idle)
   "Compile FUNCTION-OR-FILE into native code.
 This is the entry-point for the Emacs Lisp native compiler.
 FUNCTION-OR-FILE is a function symbol or a path to an Elisp file.
 When WITH-LATE-LOAD non Nil mark the compilation unit for late load
 once finished compiling (internal use only).
 Return the compilation unit file name."
+  (if idle (comp--set-idle-priority))
   (unless (or (functionp function-or-file)
               (stringp function-or-file))
     (signal 'native-compiler-error

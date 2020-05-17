@@ -27,6 +27,12 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include <signal.h>
 #include <libgccjit.h>
 
+#ifdef HAVE_SCHED_H
+#include <sched.h>
+#elif HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+
 #include "lisp.h"
 #include "puresize.h"
 #include "window.h"
@@ -3859,6 +3865,26 @@ DEFUN ("native-elisp-load", Fnative_elisp_load, Snative_elisp_load, 1, 2, 0,
   return Qt;
 }
 
+/* Try to set the process to have SCHED_IDLE priority; if this is
+   unavailable, nice the process if we are a Unix system.
+
+   TODO: Add proper support for idle priority on Windows/macOS. */
+DEFUN ("comp--set-idle-priority", Fcomp__set_idle_priority,
+       Scomp__set_idle_priority, 0, 0, 0, doc
+       : /* Set idle scheduling priority.  */)
+  (void)
+{
+  int ret = 1;
+#ifdef SCHED_IDLE
+  struct sched_param param;
+  param.sched_priority = 0;
+  ret = sched_setscheduler (0, SCHED_IDLE, &param);
+#elif HAVE_UNISTD_H
+  ret = nice (10);
+#endif
+  return ret ? Qnil : Qt;
+}
+
 
 void
 syms_of_comp (void)
@@ -3971,6 +3997,7 @@ syms_of_comp (void)
   defsubr (&Scomp__register_lambda);
   defsubr (&Scomp__register_subr);
   defsubr (&Scomp__late_register_subr);
+  defsubr (&Scomp__set_idle_priority);
   defsubr (&Snative_elisp_load);
 
   staticpro (&comp.exported_funcs_h);
