@@ -2296,8 +2296,7 @@ processes from `comp-async-compilations'"
             (setf num-cpus
                   ;; Half of the CPUs or at least one.
                   ;; FIXME portable?
-                  (max 1 (/ (string-to-number (shell-command-to-string "nproc"))
-                            2))))
+                  (max 1 (string-to-number (shell-command-to-string "nproc")))))
       comp-async-jobs-number)))
 
 (defun comp-run-async-workers ()
@@ -2335,7 +2334,8 @@ display a message."
                              :command (list
                                        (expand-file-name invocation-name
                                                          invocation-directory)
-                                       "--batch" "--eval" (prin1-to-string expr))
+                                       "--batch" "--scheduler" "idle"
+                                       "--eval" (prin1-to-string expr))
                              :sentinel
                              (lambda (process _event)
                                (run-hook-with-args
