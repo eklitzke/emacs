@@ -33,6 +33,10 @@ along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.  */
 #include <unistd.h>
 #endif
 
+#ifdef HAVE_LINUX_SYSINFO
+#include <sys/sysinfo.h>
+#endif
+
 #include "lisp.h"
 #include "puresize.h"
 #include "window.h"
@@ -3885,6 +3889,19 @@ DEFUN ("comp--set-idle-priority", Fcomp__set_idle_priority,
   return ret ? Qnil : Qt;
 }
 
+/* Try to get the number of online CPUs. */
+DEFUN ("comp--get-nprocs", Fcomp__get_nprocs,
+       Scomp__get_nprocs, 0, 0, 0,
+       doc: /* Get the number of cpus..  */)
+  (void)
+{
+#ifdef HAVE_LINUX_SYSINFO
+  return make_int (get_nprocs ());
+#else
+  return make_int (1);
+#endif
+}
+
 
 void
 syms_of_comp (void)
@@ -3998,6 +4015,7 @@ syms_of_comp (void)
   defsubr (&Scomp__register_subr);
   defsubr (&Scomp__late_register_subr);
   defsubr (&Scomp__set_idle_priority);
+  defsubr (&Scomp__get_nprocs);
   defsubr (&Snative_elisp_load);
 
   staticpro (&comp.exported_funcs_h);

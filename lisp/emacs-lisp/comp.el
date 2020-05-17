@@ -2292,11 +2292,7 @@ processes from `comp-async-compilations'"
   (defun comp-effective-async-max-jobs ()
     "Compute the effective number of async jobs."
     (if (zerop comp-async-jobs-number)
-        (or num-cpus
-            (setf num-cpus
-                  ;; Half of the CPUs or at least one.
-                  ;; FIXME portable?
-                  (max 1 (string-to-number (shell-command-to-string "nproc")))))
+        (or num-cpus (setf num-cpus (comp--get-nprocs)))
       comp-async-jobs-number)))
 
 (defun comp-run-async-workers ()
