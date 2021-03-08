@@ -2497,8 +2497,6 @@ list that represents a doc string reference.
 	      byte-compile-output nil
               byte-compile-jump-tables nil))))
 
-(defvar byte-compile-force-lexical-warnings nil)
-
 (defun byte-compile-preprocess (form &optional _for-effect)
   (setq form (macroexpand-all form byte-compile-macro-environment))
   ;; FIXME: We should run byte-optimize-form here, but it currently does not
@@ -2509,7 +2507,6 @@ list that represents a doc string reference.
   ;;     (setq form (byte-optimize-form form for-effect)))
   (cond
    (lexical-binding (cconv-closure-convert form))
-   (byte-compile-force-lexical-warnings (cconv-warnings-only form))
    (t form)))
 
 ;; byte-hunk-handlers cannot call this!
@@ -2575,12 +2572,14 @@ list that represents a doc string reference.
 (put 'defvar   'byte-hunk-handler 'byte-compile-file-form-defvar)
 (put 'defconst 'byte-hunk-handler 'byte-compile-file-form-defvar)
 
-(defun byte-compile--declare-var (sym)
+(defun byte-compile--check-prefixed-var (sym)
   (when (and (symbolp sym)
              (not (string-match "[-*/:$]" (symbol-name sym)))
              (byte-compile-warning-enabled-p 'lexical sym))
-    (byte-compile-warn "global/dynamic var `%s' lacks a prefix"
-                       sym))
+    (byte-compile-warn "global/dynamic var `%s' lacks a prefix" sym)))
+
+(defun byte-compile--declare-var (sym)
+  (byte-compile--check-prefixed-var sym)
   (when (memq sym byte-compile-lexical-variables)
     (setq byte-compile-lexical-variables
           (delq sym byte-compile-lexical-variables))
@@ -2872,16 +2871,12 @@ FUN should be either a `lambda' value or a `closure' value."
     (dolist (binding env)
       (cond
        ((consp binding)
-        ;; We check shadowing by the args, so that the `let' can be moved
-        ;; within the lambda, which can then be unfolded.  FIXME: Some of those
-        ;; bindings might be unused in `body'.
-        (unless (memq (car binding) args) ;Shadowed.
-          (push `(,(car binding) ',(cdr binding)) renv)))
+        (push `(,(car binding) ',(cdr binding)) renv))
        ((eq binding t))
        (t (push `(defvar ,binding) body))))
     (if (null renv)
         `(lambda ,args ,@preamble ,@body)
-      `(lambda ,args ,@preamble (let ,(nreverse renv) ,@body)))))
+      `(let ,renv (lambda ,args ,@preamble ,@body)))))
 
 ;;;###autoload
 (defun byte-compile (form)
@@ -2906,23 +2901,27 @@ If FORM is a lambda or a macro, byte-compile it as a function."
                  (if (symbolp form) form "provided"))
         fun)
        (t
-        (when (or (symbolp form) (eq (car-safe fun) 'closure))
-          ;; `fun' is a function *value*, so try to recover its corresponding
-          ;; source code.
-          (setq lexical-binding (eq (car fun) 'closure))
-          (setq fun (byte-compile--reify-function fun)))
-        ;; Expand macros.
-        (setq fun (byte-compile-preprocess fun))
-        (setq fun (byte-compile-top-level fun nil 'eval))
-        (if (symbolp form)
-            ;; byte-compile-top-level returns an *expression* equivalent to the
-            ;; `fun' expression, so we need to evaluate it, tho normally
-            ;; this is not needed because the expression is just a constant
-            ;; byte-code object, which is self-evaluating.
-            (setq fun (eval fun t)))
-        (if macro (push 'macro fun))
-        (if (symbolp form) (fset form fun))
-        fun))))))
+        (let (final-eval)
+          (when (or (symbolp form) (eq (car-safe fun) 'closure))
+            ;; `fun' is a function *value*, so try to recover its corresponding
+            ;; source code.
+            (setq lexical-binding (eq (car fun) 'closure))
+            (setq fun (byte-compile--reify-function fun))
+            (setq final-eval t))
+          ;; Expand macros.
+          (setq fun (byte-compile-preprocess fun))
+          (setq fun (byte-compile-top-level fun nil 'eval))
+          (if (symbolp form)
+              ;; byte-compile-top-level returns an *expression* equivalent to the
+              ;; `fun' expression, so we need to evaluate it, tho normally
+              ;; this is not needed because the expression is just a constant
+              ;; byte-code object, which is self-evaluating.
+              (setq fun (eval fun t)))
+          (if final-eval
+              (setq fun (eval fun t)))
+          (if macro (push 'macro fun))
+          (if (symbolp form) (fset form fun))
+          fun)))))))
 
 (defun byte-compile-sexp (sexp)
   "Compile and return SEXP."
@@ -4278,9 +4277,15 @@ that suppresses all warnings during execution of BODY."
 			byte-compile-unresolved-functions))
 	  (bound-list (byte-compile-find-bound-condition
                        ,condition '(boundp default-boundp local-variable-p)))
+          (new-bound-list
+           ;; (seq-difference  byte-compile-bound-variables))
+           (delq nil (mapcar (lambda (s)
+                               (if (memq s byte-compile-bound-variables) nil s))
+                             bound-list)))
 	  ;; Maybe add to the bound list.
 	  (byte-compile-bound-variables
-           (append bound-list byte-compile-bound-variables)))
+           (append new-bound-list byte-compile-bound-variables)))
+     (mapc #'byte-compile--check-prefixed-var new-bound-list)
      (unwind-protect
 	 ;; If things not being bound at all is ok, so must them being
 	 ;; obsolete.  Note that we add to the existing lists since Tramp
@@ -5319,8 +5324,9 @@ already up-to-date."
   "Reload any Lisp file that was changed since Emacs was dumped.
 Use with caution."
   (let* ((argv0 (car command-line-args))
-         (emacs-file (executable-find argv0)))
-    (if (not (and emacs-file (file-executable-p emacs-file)))
+         (emacs-file (or (cdr (nth 2 (pdumper-stats)))
+                         (executable-find argv0))))
+    (if (not (and emacs-file (file-exists-p emacs-file)))
         (message "Can't find %s to refresh preloaded Lisp files" argv0)
       (dolist (f (reverse load-history))
         (setq f (car f))

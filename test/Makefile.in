@@ -32,6 +32,7 @@ SHELL = @SHELL@
 
 srcdir = @srcdir@
 abs_top_srcdir=@abs_top_srcdir@
+top_builddir = @top_builddir@
 VPATH = $(srcdir)
 
 FIND_DELETE = @FIND_DELETE@
@@ -45,7 +46,6 @@ CPPFLAGS = @CPPFLAGS@
 SO = @MODULES_SUFFIX@
 
 SEPCHAR = @SEPCHAR@
-
 
 # 'make' verbosity.
 AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
