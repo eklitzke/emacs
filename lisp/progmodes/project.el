@@ -106,7 +106,7 @@
 ;;
 ;; - Write a new function that will determine the current project
 ;; based on the directory and add it to `project-find-functions'
-;; (which see) using `add-hook'. It is a good idea to depend on the
+;; (which see) using `add-hook'.  It is a good idea to depend on the
 ;; directory only, and not on the current major mode, for example.
 ;; Because the usual expectation is that all files in the directory
 ;; belong to the same project (even if some/most of them are ignored).
@@ -208,13 +208,19 @@ of the project instance object."
 (defun project--find-in-directory (dir)
   (run-hook-with-args-until-success 'project-find-functions dir))
 
+(defvar project--within-roots-fallback nil)
+
 (cl-defgeneric project-root (project)
   "Return root directory of the current project.
 
 It usually contains the main build file, dependencies
 configuration file, etc. Though neither is mandatory.
 
-The directory name must be absolute."
+The directory name must be absolute.")
+
+(cl-defmethod project-root (project
+                            &context (project--within-roots-fallback
+                                      (eql nil)))
   (car (project-roots project)))
 
 (cl-defgeneric project-roots (project)
@@ -226,7 +232,8 @@ and the rest should be possible to express through
   ;; FIXME: Can we specify project's version here?
   ;; FIXME: Could we make this affect cl-defmethod calls too?
   (declare (obsolete project-root "0.3.0"))
-  (list (project-root project)))
+  (let ((project--within-roots-fallback t))
+    (list (project-root project))))
 
 ;; FIXME: Add MODE argument, like in `ede-source-paths'?
 (cl-defgeneric project-external-roots (_project)
@@ -775,7 +782,7 @@ pattern to search for."
     xrefs))
 
 (defun project--read-regexp ()
-  (let ((sym (thing-at-point 'symbol)))
+  (let ((sym (thing-at-point 'symbol t)))
     (read-regexp "Find regexp" (and sym (regexp-quote sym)))))
 
 ;;;###autoload
@@ -1255,7 +1262,6 @@ It's also possible to enter an arbitrary directory not in the list."
 
 ;;; Project switching
 
-;;;###autoload
 (defcustom project-switch-commands
   '((project-find-file "Find file")
     (project-find-regexp "Find regexp")

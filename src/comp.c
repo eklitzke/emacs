@@ -429,7 +429,7 @@ load_gccjit_if_necessary (bool mandatory)
 
 
 /* Increase this number to force a new Vcomp_abi_hash to be generated.  */
-#define ABI_VERSION "3"
+#define ABI_VERSION "4"
 
 /* Length of the hashes used for eln file naming.  */
 #define HASH_LENGTH 8
@@ -654,9 +654,6 @@ void *helper_link_table[] =
     helper_PSEUDOVECTOR_TYPEP_XUNTAG,
     pure_write_error,
     push_handler,
-#ifdef WINDOWSNT
-    SETJMP_NAME,
-#endif
     record_unwind_protect_excursion,
     helper_unbind_n,
     helper_save_restriction,
@@ -1972,6 +1969,11 @@ emit_setjmp (gcc_jit_rvalue *buf)
   return gcc_jit_context_new_call (comp.ctxt, NULL, f, 1, args);
 #else
   /* _setjmp (buf, __builtin_frame_address (0)) */
+  gcc_jit_param *params[] =
+  {
+    gcc_jit_context_new_param (comp.ctxt, NULL, comp.void_ptr_type, "buf"),
+    gcc_jit_context_new_param (comp.ctxt, NULL, comp.void_ptr_type, "frame"),
+  };
   gcc_jit_rvalue *args[2];
 
   args[0] =
@@ -1985,8 +1987,14 @@ emit_setjmp (gcc_jit_rvalue *buf)
 					    "__builtin_frame_address"),
       1, args);
   args[0] = buf;
-  return emit_call (intern_c_string (STR (SETJMP_NAME)), comp.int_type, 2, args,
-                    false);
+  gcc_jit_function *f =
+    gcc_jit_context_new_function (comp.ctxt, NULL,
+				  GCC_JIT_FUNCTION_IMPORTED,
+				  comp.int_type, STR (SETJMP_NAME),
+				  ARRAYELTS (params), params,
+				  false);
+
+  return gcc_jit_context_new_call (comp.ctxt, NULL, f, 2, args);
 #endif
 }
 
@@ -2700,12 +2708,6 @@ declare_runtime_imported_funcs (void)
   args[0] = comp.lisp_obj_type;
   args[1] = comp.int_type;
   ADD_IMPORTED (push_handler, comp.handler_ptr_type, 2, args);
-
-#ifdef WINDOWSNT
-  args[0] = gcc_jit_type_get_pointer (gcc_jit_struct_as_type (comp.jmp_buf_s));
-  args[1] = comp.void_ptr_type;
-  ADD_IMPORTED (SETJMP_NAME, comp.int_type, 2, args);
-#endif
 
   ADD_IMPORTED (record_unwind_protect_excursion, comp.void_type, 0, NULL);
 
@@ -3999,11 +4001,10 @@ make_directory_wrapper_1 (Lisp_Object ignore)
   return Qt;
 }
 
-DEFUN ("comp-el-to-eln-filename", Fcomp_el_to_eln_filename,
-       Scomp_el_to_eln_filename, 1, 2, 0,
-       doc: /* Return the corresponding .eln filename for source FILENAME.
-If BASE-DIR is nil use the first entry in `comp-eln-load-path'.  */)
-  (Lisp_Object filename, Lisp_Object base_dir)
+DEFUN ("comp-el-to-eln-rel-filename", Fcomp_el_to_eln_rel_filename,
+       Scomp_el_to_eln_rel_filename, 1, 1, 0,
+       doc: /* Return the corresponding .eln relative filename.  */)
+  (Lisp_Object filename)
 {
   CHECK_STRING (filename);
 
@@ -4080,7 +4081,17 @@ If BASE-DIR is nil use the first entry in `comp-eln-load-path'.  */)
 							   make_fixnum (-3))),
 		      separator);
   Lisp_Object hash = concat3 (path_hash, separator, content_hash);
-  filename = concat3 (filename, hash, build_string (NATIVE_ELISP_SUFFIX));
+  return concat3 (filename, hash, build_string (NATIVE_ELISP_SUFFIX));
+}
+
+DEFUN ("comp-el-to-eln-filename", Fcomp_el_to_eln_filename,
+       Scomp_el_to_eln_filename, 1, 2, 0,
+       doc: /* Return the .eln filename for source FILENAME to used
+for new compilations.
+If BASE-DIR is nil use the first entry in `comp-eln-load-path'.  */)
+  (Lisp_Object filename, Lisp_Object base_dir)
+{
+  filename = Fcomp_el_to_eln_rel_filename (filename);
 
   /* If base_dir was not specified search inside Vcomp_eln_load_path
      for the first directory where we have write access.  */
@@ -4119,8 +4130,8 @@ If BASE-DIR is nil use the first entry in `comp-eln-load-path'.  */)
     base_dir = Fexpand_file_name (base_dir, Vinvocation_directory);
 
   return Fexpand_file_name (filename,
-			    concat2 (Ffile_name_as_directory (base_dir),
-				     Vcomp_native_version_dir));
+			    Fexpand_file_name (Vcomp_native_version_dir,
+					       base_dir));
 }
 
 DEFUN ("comp--install-trampoline", Fcomp__install_trampoline,
@@ -4611,12 +4622,12 @@ eln_load_path_final_clean_up (void)
     {
       Lisp_Object files_in_dir =
 	internal_condition_case_5 (Fdirectory_files,
-				   concat2 (XCAR (dir_tail),
-					    Vcomp_native_version_dir),
+				   Fexpand_file_name (Vcomp_native_version_dir,
+						      XCAR (dir_tail)),
 				   Qt, build_string ("\\.eln\\.old\\'"), Qnil,
 				   Qnil, Qt, return_nil);
       FOR_EACH_TAIL (files_in_dir)
-	Fdelete_file (XCAR (files_in_dir), Qnil);
+	internal_delete_file (XCAR (files_in_dir));
     }
 #endif
 }
@@ -5285,6 +5296,7 @@ compiled one.  */);
 			     "configuration, please recompile"));
 
   defsubr (&Scomp__subr_signature);
+  defsubr (&Scomp_el_to_eln_rel_filename);
   defsubr (&Scomp_el_to_eln_filename);
   defsubr (&Scomp_native_driver_options_effective_p);
   defsubr (&Scomp__install_trampoline);

@@ -1327,6 +1327,8 @@ Same format as `byte-optimize--lexvars', with shared structure and contents.")
 	 radians-to-degrees rassq rassoc read-from-string regexp-opt
          regexp-quote region-beginning region-end reverse round
 	 sin sqrt string string< string= string-equal string-lessp
+         string> string-greaterp string-empty-p
+         string-prefix-p string-suffix-p string-blank-p
          string-search string-to-char
 	 string-to-number string-to-syntax substring
 	 sxhash sxhash-equal sxhash-eq sxhash-eql
@@ -2348,6 +2350,7 @@ If FOR-EFFECT is non-nil, the return value is assumed to be of no importance."
 ;;
 (eval-when-compile
  (or (byte-code-function-p (symbol-function 'byte-optimize-form))
+     (subr-native-elisp-p (symbol-function 'byte-optimize-form))
      (assq 'byte-code (symbol-function 'byte-optimize-form))
      (let ((byte-optimize nil)
 	   (byte-compile-warnings nil))

@@ -1918,12 +1918,11 @@ Interactively, or with optional arg MSG non-nil, print the
 resulting color name in the echo area."
   (interactive "i\np\ni\np")    ; Always convert to RGB interactively.
   (let* ((completion-ignore-case t)
-	 (colors (or facemenu-color-alist
-		     (append '("foreground at point" "background at point")
-			     (if allow-empty-name '(""))
-                             (if (display-color-p)
-                                 (defined-colors-with-face-attributes)
-                               (defined-colors)))))
+	 (colors (append '("foreground at point" "background at point")
+			 (if allow-empty-name '(""))
+                         (if (display-color-p)
+                             (defined-colors-with-face-attributes)
+                           (defined-colors))))
 	 (color (completing-read
 		 (or prompt "Color (name or #RGB triplet): ")
 		 ;; Completing function for reading colors, accepting
@@ -2817,11 +2816,18 @@ Note: Other faces cannot inherit from the cursor face."
   :group 'help)
 
 (defface help-key-binding
-  '((((class color) (min-colors 88) (background light)) :foreground "ForestGreen")
-    (((class color) (min-colors 88) (background dark)) :foreground "#44bc44")
-    (((class color grayscale) (background light)) :foreground "grey15")
-    (((class color grayscale) (background dark)) :foreground "grey85")
-    (t :foreground "ForestGreen"))
+  '((((class color) (min-colors 88) (background light))
+     :background "grey96" :foreground "DarkBlue"
+     ;; We use negative thickness of the horizontal box border line to
+     ;; avoid enlarging the height of the echo-area display, which
+     ;; would then move the mode line a few pixels up.
+     :box (:line-width (1 . -1) :color "grey80"))
+    (((class color) (min-colors 88) (background dark))
+     :background "grey19" :foreground "LightBlue"
+     :box (:line-width (1 . -1) :color "grey35"))
+    (((class color grayscale) (background light)) :background "grey90")
+    (((class color grayscale) (background dark)) :background "grey25")
+    (t :background "grey90"))
   "Face for keybindings in *Help* buffers.
 
 This face is added by `substitute-command-keys', which see.

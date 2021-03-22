@@ -411,6 +411,12 @@ elements is negated: these commands will NOT prompt."
   "Functions called after returning to a pre-jump location."
   :type 'hook)
 
+(defcustom xref-after-update-hook nil
+  "Functions called after the xref buffer is updated."
+  :type 'hook
+  :version "28.1"
+  :package-version '(xref . "1.0.4"))
+
 (defvar xref--marker-ring (make-ring xref-marker-ring-length)
   "Ring of markers to implement the marker stack.")
 
@@ -603,16 +609,26 @@ SELECT is `quit', also quit the *xref* window."
     (when xref
       (xref--show-location (xref-item-location xref)))))
 
+(defun xref-next-line-no-show ()
+  "Move to the next xref but don't display its source."
+  (interactive)
+  (xref--search-property 'xref-item))
+
 (defun xref-next-line ()
   "Move to the next xref and display its source in the appropriate window."
   (interactive)
-  (xref--search-property 'xref-item)
+  (xref-next-line-no-show)
   (xref-show-location-at-point))
+
+(defun xref-prev-line-no-show ()
+  "Move to the previous xref but don't display its source."
+  (interactive)
+  (xref--search-property 'xref-item t))
 
 (defun xref-prev-line ()
   "Move to the previous xref and display its source in the appropriate window."
   (interactive)
-  (xref--search-property 'xref-item t)
+  (xref-prev-line-no-show)
   (xref-show-location-at-point))
 
 (defun xref-next-group ()
@@ -927,7 +943,8 @@ GROUP is a string for decoration purposes and XREF is an
                          prefix summary)
                         (setq prev-line line
                               prev-group group))))
-           (insert "\n")))
+           (insert "\n"))
+  (run-hooks 'xref-after-update-hook))
 
 (defun xref--analyze (xrefs)
   "Find common filenames in XREFS.

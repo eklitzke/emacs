@@ -2275,6 +2275,9 @@ With argument ARG, insert value in current buffer after the form."
           (push `(comp-debug . ,comp-debug) byte-native-qualities)
           (defvar comp-native-driver-options)
           (push `(comp-native-driver-options . ,comp-native-driver-options)
+                byte-native-qualities)
+          (defvar no-native-compile)
+          (push `(no-native-compile . ,no-native-compile)
                 byte-native-qualities))
 
 	;; Compile the forms from the input buffer.
@@ -5420,6 +5423,7 @@ and corresponding effects."
 ;;
 (eval-when-compile
   (or (byte-code-function-p (symbol-function 'byte-compile-form))
+      (subr-native-elisp-p (symbol-function 'byte-compile-form))
       (assq 'byte-code (symbol-function 'byte-compile-form))
       (let ((byte-optimize nil)		; do it fast
 	    (byte-compile-warnings nil))

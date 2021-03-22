@@ -54,15 +54,16 @@
 ;; bound locally, without all these "reference to free variable"
 ;; compiler warnings!
 
-(defmacro wisent-context-name (name)
-  "Return the context name from NAME."
-  `(if (and ,name (symbolp ,name))
-       (intern (format "wisent-context-%s" ,name))
-     (error "Invalid context name: %S" ,name)))
+(eval-when-compile
+  (defun wisent-context-name (name)
+    "Return the context name from NAME."
+    (if (and name (symbolp name))
+        (intern (format "wisent-context-%s" name))
+      (error "Invalid context name: %S" name)))
 
-(defmacro wisent-context-bindings (name)
-  "Return the variables in context NAME."
-  `(symbol-value (wisent-context-name ,name)))
+  (defun wisent-context-bindings (name)
+    "Return the variables in context NAME."
+    (symbol-value (wisent-context-name name))))
 
 (defmacro wisent-defcontext (name &rest vars)
   "Define a context NAME that will bind variables VARS."
@@ -71,18 +72,14 @@
          (declarations (mapcar #'(lambda (v) (list 'defvar v)) vars)))
     `(progn
        ,@declarations
-       (eval-and-compile
+       (eval-when-compile
          (defvar ,context ',vars)))))
 
 (defmacro wisent-with-context (name &rest body)
   "Bind variables in context NAME then eval BODY."
   (declare (indent 1))
-  (let ((bindings (wisent-context-bindings name)))
-    `(progn
-       ,@(mapcar (lambda (binding) `(defvar ,(or (car-safe binding) binding)))
-                 bindings)
-       (let* ,bindings
-         ,@body))))
+  `(dlet ,(wisent-context-bindings name)
+     ,@body))
 
 ;; Other utilities
 
@@ -3453,7 +3450,7 @@ Automatically called by the Emacs Lisp byte compiler as a
 `byte-compile' handler."
   (byte-compile-form
    (macroexpand-all
-    (wisent-automaton-lisp-form (eval form)))))
+    (wisent-automaton-lisp-form (eval form t)))))
 
 (defun wisent-compile-grammar (grammar &optional start-list)
   ;; This is kept for compatibility with FOO-wy.el files generated
