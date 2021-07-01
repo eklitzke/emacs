@@ -3912,6 +3912,17 @@ if test "${with_native_compilation}" != "no"; then
     esac
     NEED_DYNLIB=yes
     AC_DEFINE(HAVE_NATIVE_COMP, 1, [Define to 1 if native compiler is available.])
+
+    # XXX: This is a huge hack that doesn't work right. One problem:
+    # we can have GCC=yes even if CC=clang, so using $CC below isn't
+    # necessarily correct. Thus the use of "gcc" is hardcoded below,
+    # but this is also not right because we could have something like
+    # gcc on the system correspond to gcc 8, but the configure script
+    # was invoked with CC=gcc-11 (for example).
+    if test x$GCC = xyes; then
+      native_flags=`(gcc -march=native -v -E - </dev/null 2>&1 | awk '/cc1/ { for (i = 0; i < NF; i++) { if ($i ~ /^-m/) { f = f " "  $i } } } END { print substr(f, 2) }')`
+      AC_DEFINE_UNQUOTED(GCC_NATIVE_FLAGS, ["$native_flags"], [Flags corresponding to -march=native.])
+    fi
 fi
 AC_DEFINE_UNQUOTED(NATIVE_ELISP_SUFFIX, ".eln",
   [System extension for native compiled elisp])

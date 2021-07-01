@@ -4506,6 +4506,20 @@ DEFUN ("comp--compile-ctxt-to-file", Fcomp__compile_ctxt_to_file,
 					     "-fdisable-tree-isolate-paths");
 #endif
 
+#if defined(LIBGCCJIT_HAVE_gcc_jit_context_add_command_line_option) && defined(GCC_NATIVE_FLAGS)
+  // Take all the options from GCC_NATIVE_FLAGS and add them to the jit context flags.
+
+  // FIXME: Do this in a static array to avoid memory allocation/copy
+  // each time.
+  const char *flags = xstrdup (GCC_NATIVE_FLAGS);
+  char *saveptr = NULL;
+  for (const char *pch = strtok_r (flags, " ", &saveptr);
+       pch != NULL; pch = strtok_r (NULL, " ", &saveptr)) {
+    gcc_jit_context_add_command_line_option (comp.ctxt, pch);
+  }
+  xfree (flags);
+#endif
+
   add_driver_options ();
 
   if (comp.debug > 1)
